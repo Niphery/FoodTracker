@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import CoreData
 
 class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSource, UISearchBarDelegate, UISearchControllerDelegate, UISearchResultsUpdating {
 
@@ -17,6 +18,10 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
     var filteredSuggestedSearchFoods:[String] = []
     var jsonResponse: NSDictionary!
     var apiSearchForFoods:[(name: String, idValue: String)] = []
+    
+    var dataController = DataController()
+    var favoritedUSDAItems:[ USDAItem] = []
+    var filteredFavoritedUSDAItems: [USDAItem] = []
     
     var scopeButtonTitles = ["Recommended", "Search Results", "Saved"]
     
@@ -64,10 +69,14 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
         } else if selectedScopeButtonIndex == 1 {
             return self.apiSearchForFoods.count
         } else {
-            return 0
+            if self.searchController.active {
+                return self.filteredFavoritedUSDAItems.count
+            } else {
+                println("\(self.favoritedUSDAItems.count) rows to display")
+                return self.favoritedUSDAItems.count
+                
+            }
         }
-        
-        
 
     }
     
@@ -86,10 +95,13 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
         } else if selectedScopeButtonIndex == 1 {
             foodName = apiSearchForFoods[indexPath.row].name
         } else {
-            foodName = ""
+            if self.searchController.active {
+                foodName = self.filteredFavoritedUSDAItems[indexPath.row].name
+            } else {
+                foodName = self.favoritedUSDAItems[indexPath.row].name
+            }
+            
         }
-        
-        
         
         cell.textLabel?.text = foodName
         cell.accessoryType = UITableViewCellAccessoryType.DisclosureIndicator
@@ -111,7 +123,8 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
             self.searchController.searchBar.selectedScopeButtonIndex = 1
             makeRequest(searchFoodName)
         } else if selectedScopeButtonIndex == 1 {
-            
+            let idValue = apiSearchForFoods[indexPath.row].idValue
+            self.dataController.saveUSDAItemForId(idValue, json: self.jsonResponse)
         } else if selectedScopeButtonIndex == 2 {
             
         }
@@ -128,10 +141,18 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
     }
     
     func filterContentForSearch (searchText:String, scope: Int) {
-        self.filteredSuggestedSearchFoods = self.suggestedSearchFoods.filter({ (food:String) -> Bool in
-            var foodMatch = food.rangeOfString(searchText)
-            return foodMatch != nil
-        })
+        
+        if scope == 0 {
+            self.filteredSuggestedSearchFoods = self.suggestedSearchFoods.filter({ (food:String) -> Bool in
+                var foodMatch = food.rangeOfString(searchText)
+                return foodMatch != nil
+            })
+        } else if scope == 2 {
+            self.filteredFavoritedUSDAItems = self.favoritedUSDAItems.filter({ (item: USDAItem) -> Bool in
+                var stringMatch = item.name.rangeOfString(searchText)
+                return stringMatch != nil
+            })
+        }
     }
     
     // Mark - UISearchBarDelegate
@@ -142,6 +163,9 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
     }
     
     func searchBar(searchBar: UISearchBar, selectedScopeButtonIndexDidChange selectedScope: Int) {
+        if selectedScope == 2 {
+            requestFavoritedUSDAItems()
+        }
         self.tableView.reloadData()
     }
     
@@ -208,6 +232,14 @@ class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSour
         
         task.resume()
         
+    }
+    
+    // Mark - Setup CoreData
+    func requestFavoritedUSDAItems () {
+        let fetchRequest = NSFetchRequest(entityName: "USDAItem")
+        let appDelegate = (UIApplication.sharedApplication().delegate as! AppDelegate)
+        let managedObjectContext = appDelegate.managedObjectContext
+        self.favoritedUSDAItems = managedObjectContext?.executeFetchRequest(fetchRequest, error: nil) as! [USDAItem]
     }
 }
 
